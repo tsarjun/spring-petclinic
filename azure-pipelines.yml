@@ -24,13 +24,12 @@ stages:
   - job: Scan
     steps:
     - script: |
-        ./mvnw clean verify sonar:sonar \
+        ./mvnw clean verify \
+        org.sonarsource.scanner.maven:sonar-maven-plugin:4.0.0.4121:sonar \
         -Dsonar.projectKey=tsarjungowda_petclinic \
         -Dsonar.organization=tsarjungowda \
         -Dsonar.host.url=https://sonarcloud.io \
-        -Dsonar.login=$(SONAR_TOKEN) \
-        -Dsonar.scanner.forceReload=true
-
+        -Dsonar.login=$(SONAR_TOKEN)
 # 3️⃣ Build
 - stage: Build
   jobs:
