@@ -2,7 +2,7 @@ trigger:
 - main
 
 pool:
-  name: Default
+  vmImage: 'ubuntu-latest'
 
 variables:
   acrName: arjunacr.azurecr.io
@@ -11,45 +11,51 @@ variables:
 
 stages:
 
-# 1️⃣ Fetch
+# 1️⃣ Fetch Source
 - stage: Fetch
   jobs:
   - job: FetchCode
     steps:
     - checkout: self
 
-# 2️⃣ SonarQube
+# 2️⃣ SonarQube (SonarCloud)
 - stage: SonarQube
   jobs:
   - job: Scan
     steps:
     - script: |
-        mvnw.cmd clean verify sonar:sonar ^
-        -Dsonar.projectKey=tsarjungowda_petclinic ^
-        -Dsonar.organization=tsarjun ^
-        -Dsonar.host.url=https://sonarcloud.io ^
+        chmod +x mvnw
+        ./mvnw clean verify sonar:sonar \
+        -Dsonar.projectKey=tsarjun_spring-petclinic \
+        -Dsonar.organization=tsarjun \
+        -Dsonar.host.url=https://sonarcloud.io \
         -Dsonar.login=$(SONAR_TOKEN)
-# 3️⃣ Build
+
+# 3️⃣ Maven Build
 - stage: Build
   jobs:
   - job: BuildApp
     steps:
-    - script: ./mvnw clean package
+    - script: |
+        chmod +x mvnw
+        ./mvnw clean package -DskipTests
 
 # 4️⃣ Docker Build
 - stage: DockerBuild
   jobs:
   - job: BuildImage
     steps:
-    - script: docker build -t $(acrName)/$(imageName):$(tag) .
+    - script: |
+        docker build -t $(acrName)/$(imageName):$(tag) .
 
-# 5️⃣ Push
+# 5️⃣ Push to ACR
 - stage: Push
   jobs:
   - job: PushImage
     steps:
     - script: |
-        docker login arjunacr.azurecr.io -u <username> -p <password>
+        echo "Logging into ACR"
+        docker login $(acrName) -u $(ACR_USERNAME) -p $(ACR_PASSWORD)
         docker push $(acrName)/$(imageName):$(tag)
 
 # 6️⃣ Trivy Scan
@@ -57,9 +63,15 @@ stages:
   jobs:
   - job: Security
     steps:
-    - script: trivy image $(acrName)/$(imageName):$(tag)
+    - script: |
+        sudo apt-get install -y wget apt-transport-https gnupg lsb-release
+        wget -qO - https://aquasecurity.github.io/trivy-repo/deb/public.key | sudo apt-key add -
+        echo "deb https://aquasecurity.github.io/trivy-repo/deb $(lsb_release -sc) main" | sudo tee -a /etc/apt/sources.list.d/trivy.list
+        sudo apt-get update
+        sudo apt-get install -y trivy
+        trivy image $(acrName)/$(imageName):$(tag)
 
-# 7️⃣ Deploy
+# 7️⃣ Deploy to AKS
 - stage: Deploy
   jobs:
   - job: DeployApp
