@@ -14,6 +14,6 @@ spec:
     spec:
       containers:
       - name: petclinic
-        image: myacr.azurecr.io/petclinic:latest
+        image: arjunacr.azurecr.io/petclinic:latest
         ports:
         - containerPort: 8080
