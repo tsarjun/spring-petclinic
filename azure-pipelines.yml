@@ -1,19 +1,62 @@
-# Starter pipeline
-# Start with a minimal pipeline that you can customize to build and deploy your code.
-# Add steps that build, run tests, deploy, and more:
-# https://aka.ms/yaml
-
 trigger:
 - main
 
 pool:
-  vmImage: ubuntu-latest
+  vmImage: 'ubuntu-latest'
 
-steps:
-- script: echo Hello, world!
-  displayName: 'Run a one-line script'
+variables:
+  acrName: myacr.azurecr.io
+  imageName: petclinic
+  tag: $(Build.BuildId)
 
-- script: |
-    echo Add other tasks to build, test, and deploy your project.
-    echo See https://aka.ms/yaml
-  displayName: 'Run a multi-line script'
+stages:
+
+# 1️⃣ Fetch
+- stage: Fetch
+  jobs:
+  - job: FetchCode
+    steps:
+    - checkout: self
+
+# 2️⃣ Build (Maven)
+- stage: Build
+  jobs:
+  - job: BuildApp
+    steps:
+    - script: ./mvnw clean package
+
+# 3️⃣ Docker Build
+- stage: DockerBuild
+  jobs:
+  - job: BuildImage
+    steps:
+    - script: docker build -t $(acrName)/$(imageName):$(tag) .
+
+# 4️⃣ Push to ACR
+- stage: Push
+  jobs:
+  - job: PushImage
+    steps:
+    - script: |
+        az acr login --name myacr
+        docker push $(acrName)/$(imageName):$(tag)
+
+# 5️⃣ Trivy Scan
+- stage: Scan
+  jobs:
+  - job: Security
+    steps:
+    - script: |
+        sudo apt-get install -y wget
+        wget https://github.com/aquasecurity/trivy/releases/latest/download/trivy_0.45.0_Linux-64bit.tar.gz
+        tar zxvf trivy_0.45.0_Linux-64bit.tar.gz
+        ./trivy image $(acrName)/$(imageName):$(tag)
+
+# 6️⃣ Deploy to AKS
+- stage: Deploy
+  jobs:
+  - job: DeployApp
+    steps:
+    - script: |
+        kubectl apply -f deployment.yaml
+        kubectl apply -f service.yaml
