@@ -7,21 +7,21 @@ pool:
 variables:
   acrName: arjunacr.azurecr.io
   imageName: petclinic
-  tag: latest
+  tag: $(Build.BuildId)
 
 stages:
 
-# 1️⃣ Fetch Source
-- stage: Fetch
+# 1️⃣ FETCH SOURCE
+- stage: FetchSource
   jobs:
-  - job: FetchCode
+  - job: Checkout
     steps:
     - checkout: self
 
-# 2️⃣ SonarQube (SonarCloud)
+# 2️⃣ SONARQUBE SCAN
 - stage: SonarQube
   jobs:
-  - job: Scan
+  - job: SonarScan
     steps:
     - script: |
         chmod +x mvnw
@@ -31,51 +31,62 @@ stages:
         -Dsonar.host.url=https://sonarcloud.io \
         -Dsonar.login=$(SONAR_TOKEN)
 
-# 3️⃣ Maven Build
+# 3️⃣ MAVEN BUILD
 - stage: Build
   jobs:
-  - job: BuildApp
+  - job: MavenBuild
     steps:
     - script: |
         chmod +x mvnw
         ./mvnw clean package -DskipTests
 
-# 4️⃣ Docker Build
-- stage: DockerBuild
+# 4️⃣ DOCKER BUILD + PUSH TO ACR
+- stage: DockerBuildPush
   jobs:
-  - job: BuildImage
+  - job: Docker
     steps:
-    - script: |
-        docker build -t $(acrName)/$(imageName):$(tag) .
+    - task: Docker@2
+      inputs:
+        containerRegistry: 'arjun-acr-connection'
+        repository: 'petclinic'
+        command: 'buildAndPush'
+        Dockerfile: '**/Dockerfile'
+        tags: |
+          $(tag)
 
-# 5️⃣ Push to ACR
-- stage: Push
+# 5️⃣ TRIVY SCAN
+- stage: TrivyScan
   jobs:
-  - job: PushImage
+  - job: SecurityScan
     steps:
     - script: |
-        echo "Logging into ACR"
-        docker login $(acrName) -u $(ACR_USERNAME) -p $(ACR_PASSWORD)
-        docker push $(acrName)/$(imageName):$(tag)
-
-# 6️⃣ Trivy Scan
-- stage: Scan
-  jobs:
-  - job: Security
-    steps:
-    - script: |
+        sudo apt-get update
         sudo apt-get install -y wget apt-transport-https gnupg lsb-release
+
         wget -qO - https://aquasecurity.github.io/trivy-repo/deb/public.key | sudo apt-key add -
-        echo "deb https://aquasecurity.github.io/trivy-repo/deb $(lsb_release -sc) main" | sudo tee -a /etc/apt/sources.list.d/trivy.list
+
+        echo "deb https://aquasecurity.github.io/trivy-repo/deb $(lsb_release -sc) main" \
+        | sudo tee -a /etc/apt/sources.list.d/trivy.list
+
         sudo apt-get update
         sudo apt-get install -y trivy
+
         trivy image $(acrName)/$(imageName):$(tag)
 
-# 7️⃣ Deploy to AKS
+# 6️⃣ DEPLOY TO AKS (FIXED)
 - stage: Deploy
   jobs:
-  - job: DeployApp
+  - job: DeployToAKS
     steps:
-    - script: |
-        kubectl apply -f deployment.yaml
-        kubectl apply -f service.yaml
+    - task: AzureCLI@2
+      inputs:
+        azureSubscription: 'aks-service-connection'
+        scriptType: bash
+        scriptLocation: inlineScript
+        inlineScript: |
+          az aks get-credentials \
+            --resource-group arjunrg \
+            --name arjun-AKS
+
+          kubectl apply -f deployment.yaml
+          kubectl apply -f service.yaml
