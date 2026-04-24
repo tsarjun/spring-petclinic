@@ -24,13 +24,15 @@ stages:
     steps:
     - script: |
         chmod +x mvnw
+
+        export SONAR_HOST_URL=https://sonarcloud.io
+
         ./mvnw clean verify sonar:sonar \
         -Dsonar.projectKey=tsarjun_spring-petclinic \
         -Dsonar.organization=tsarjun \
-        -Dsonar.host.url=https://sonarcloud.io \
         -Dsonar.login=$(SONAR_TOKEN) \
-        -Dsonar.scanner.forceAuthentication=true
-
+        -Dsonar.host.url=https://sonarcloud.io \
+        -X
 # 3️⃣ MAVEN BUILD
 - stage: Build
   jobs:
