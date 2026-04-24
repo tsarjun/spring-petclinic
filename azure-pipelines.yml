@@ -20,7 +20,7 @@ stages:
 # 2️⃣ SONARQUBE SCAN
 - stage: SonarQube
   jobs:
-  - job: SonarScan
+  - job: Scan
     steps:
     - script: |
         chmod +x mvnw
