@@ -1,8 +1,7 @@
 trigger:
 - main
-
 pool:
-  vmImage: 'ubuntu-latest'
+  name: Default
 
 variables:
   acrName: arjunacr.azurecr.io
